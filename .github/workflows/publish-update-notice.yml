@@ -4,7 +4,8 @@
 # 앱은 켤 때 이 테이블을 읽고, 지금 버전보다 높으면 "새로운 버전이 출시되었어요" 알림을 띄워요.
 #
 # 필요한 저장소 Secret (Settings → Secrets and variables → Actions):
-#   SUPABASE_SERVICE_ROLE_KEY  Supabase 대시보드 → Project Settings → API Keys → service_role (secret)
+#   SUPABASE_SERVICE_ROLE_KEY  Supabase 대시보드 → Project Settings → API Keys → Secret key (sb_secret_...)
+#                              또는 Legacy API Keys 탭의 service_role 키
 # 선택 Variable:
 #   SUPABASE_URL               기본값 https://xwclrqtyynhkziwpwvyq.supabase.co
 #

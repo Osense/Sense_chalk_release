@@ -10,6 +10,10 @@ if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
   exit 1
 fi
 
+# New secret keys (sb_secret_...) go only in the apikey header; a legacy service_role JWT also as Bearer.
+AUTH=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
+case "$SUPABASE_SERVICE_ROLE_KEY" in eyJ*) AUTH+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY");; esac
+
 # Highest version of each kind of file currently in the repository root.
 latest() { { ls -1 $1 2>/dev/null || true; } | sed -E "s/$2/\1/" | sort -V | tail -n1; }
 WIN_VER=$(latest 'SenseChalk-*-win-x64.zip' '^SenseChalk-(.*)-win-x64\.zip$')
@@ -60,14 +64,14 @@ publish() { # platform version file tag
   # Skip if this exact file is already the active notice (re-runs, README-only commits).
   local current
   current=$(curl -fsS "$SUPABASE_URL/rest/v1/rpc/latest_app_release" \
-    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    "${AUTH[@]}" \
     -H "Content-Type: application/json" -d "{\"p_platform\":\"$platform\"}" | jq -r '(.[0].sha256 // "") + "|" + (.[0].title // "") + "|" + (.[0].message // "")')
   if [ "$current" = "$sha|$title|$message" ]; then
     echo "$platform $version is already the active notice"; return 0
   fi
 
   curl -fsS "$SUPABASE_URL/rest/v1/rpc/publish_app_release" \
-    -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+    "${AUTH[@]}" \
     -H "Content-Type: application/json" -d "$body" | jq '{platform, latest_version, download_url, sha256}'
   echo "::notice::$platform $version recorded ($download)"
 }
