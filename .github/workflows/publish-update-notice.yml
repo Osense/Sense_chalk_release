@@ -1,5 +1,5 @@
 # 새 버전 알림: main에 새 배포 파일을 올리면
-#  1) 같은 버전의 GitHub 릴리스(v<버전>, 안드로이드는 android-v<버전>)를 만들고 파일을 붙이고
+#  1) 같은 버전의 GitHub 릴리스(v<버전>)를 만들고 파일을 붙이고
 #  2) Supabase app_releases 테이블에 버전/주소/sha256을 기록해요.
 # 앱은 켤 때 이 테이블을 읽고, 지금 버전보다 높으면 "새로운 버전이 출시되었어요" 알림을 띄워요.
 #
@@ -9,8 +9,8 @@
 # 선택 Variable:
 #   SUPABASE_URL               기본값 https://xwclrqtyynhkziwpwvyq.supabase.co
 #
-# 파일 이름 규칙: SenseChalk-<버전>-win-x64.zip, SenseChalk-Android-<버전>.apk
-# 바뀐 내용(팝업 문구): notes/SenseChalk-<버전>-win-x64.md, notes/SenseChalk-Android-<버전>.md
+# 파일 이름 규칙: SenseChalk-<버전>-win-x64.zip (안드로이드는 Osense/Sense_chalk_android_release)
+# 바뀐 내용(팝업 문구): notes/SenseChalk-<버전>-win-x64.md
 #   첫 줄을 "# 제목"으로 쓰면 팝업 제목, 나머지가 팝업 본문이 돼요. 파일이 없으면 기본 문구를 써요.
 #   노트만 고쳐서 올려도 알림 문구가 다시 기록돼요.
 # 수동 실행(Actions → Publish update notice → Run workflow)으로 지금 main의 파일을 다시 기록할 수도 있어요.
@@ -21,7 +21,6 @@ on:
     branches: [main]
     paths:
       - 'SenseChalk-*-win-x64.zip'
-      - 'SenseChalk-Android-*.apk'
       - 'notes/*.md'
       - '.github/workflows/publish-update-notice.yml'
       - '.github/scripts/publish-update-notice.sh'
