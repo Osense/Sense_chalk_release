@@ -16,7 +16,15 @@ case "$SUPABASE_SERVICE_ROLE_KEY" in eyJ*) AUTH+=(-H "Authorization: Bearer $SUP
 
 # Highest version of each kind of file currently in the repository root.
 latest() { { ls -1 $1 2>/dev/null || true; } | sed -E "s/$2/\1/" | sort -V | tail -n1; }
-WIN_VER=$(latest 'SenseChalk-*-win-x64.zip' '^SenseChalk-(.*)-win-x64\.zip$')
+# Fixed-name release (SenseChalk.zip + version.txt) wins; the old versioned file name is the fallback.
+WIN_FILE=""
+if [ -f SenseChalk.zip ] && [ -f version.txt ]; then
+  WIN_VER=$(head -n1 version.txt | tr -d '[:space:]')
+  WIN_FILE=SenseChalk.zip
+else
+  WIN_VER=$(latest 'SenseChalk-*-win-x64.zip' '^SenseChalk-(.*)-win-x64\.zip$')
+  [ -n "$WIN_VER" ] && WIN_FILE="SenseChalk-$WIN_VER-win-x64.zip"
+fi
 
 publish() { # platform version file tag
   local platform=$1 version=$2 file=$3 tag=$4 name
@@ -53,6 +61,13 @@ publish() { # platform version file tag
     --arg d "$download" --arg s "$sha" --argjson z "$size" --arg by "${GITHUB_SHA:-manual}" \
     '{p_platform:$p, p_version:$v, p_title:$t, p_message:$m, p_link_url:$l, p_download_url:$d, p_sha256:$s, p_file_size:$z, p_published_by:$by}')
 
+  # The release must carry this file under its own name even when the notice itself is unchanged:
+  # releases/latest/download/SenseChalk.zip (the site's download link) depends on it.
+  if gh release view "$tag" -R "$REPO" >/dev/null 2>&1 && \
+     ! gh release view "$tag" -R "$REPO" --json assets -q '.assets[].name' | grep -qx "$name"; then
+    gh release upload "$tag" "$file" -R "$REPO" --clobber
+  fi
+
   # Skip if this exact file is already the active notice (re-runs, README-only commits).
   local current
   current=$(curl -fsS "$SUPABASE_URL/rest/v1/rpc/latest_app_release" \
@@ -75,5 +90,5 @@ publish() { # platform version file tag
   echo "::notice::$platform $version recorded ($download)"
 }
 
-[ -n "$WIN_VER" ] && publish windows "$WIN_VER" "SenseChalk-$WIN_VER-win-x64.zip" "v$WIN_VER"
+[ -n "$WIN_FILE" ] && publish windows "$WIN_VER" "$WIN_FILE" "v$WIN_VER"
 exit 0

@@ -9,8 +9,10 @@
 # 선택 Variable:
 #   SUPABASE_URL               기본값 https://xwclrqtyynhkziwpwvyq.supabase.co
 #
-# 파일 이름 규칙: SenseChalk-<버전>-win-x64.zip (안드로이드는 Osense/Sense_chalk_android_release)
-# 바뀐 내용(팝업 문구): notes/SenseChalk-<버전>-win-x64.md
+# 배포 방법 (2026-11-21부터): 파일 이름은 항상 SenseChalk.zip 하나로 두고 덮어써요. 버전은 version.txt 한 줄(예: 5.4.3).
+#   홈페이지 링크는 바뀌지 않아요: https://github.com/Osense/Sense_chalk_release/releases/latest/download/SenseChalk.zip
+#   (예전 방식 SenseChalk-<버전>-win-x64.zip도 SenseChalk.zip이 없을 때만 계속 인식해요.)
+# 바뀐 내용(팝업 문구): notes/SenseChalk.md (예전 방식은 notes/SenseChalk-<버전>-win-x64.md)
 #   첫 줄을 "# 제목"으로 쓰면 팝업 제목, 나머지가 팝업 본문이 돼요. 파일이 없으면 기본 문구를 써요.
 #   노트만 고쳐서 올려도 알림 문구가 다시 기록돼요.
 # 수동 실행(Actions → Publish update notice → Run workflow)으로 지금 main의 파일을 다시 기록할 수도 있어요.
@@ -20,6 +22,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'SenseChalk.zip'
+      - 'version.txt'
       - 'SenseChalk-*-win-x64.zip'
       - 'notes/*.md'
       - '.github/workflows/publish-update-notice.yml'
