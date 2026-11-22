@@ -91,4 +91,10 @@ publish() { # platform version file tag
 }
 
 [ -n "$WIN_FILE" ] && publish windows "$WIN_VER" "$WIN_FILE" "v$WIN_VER"
+# The installer rides along in the same release; the app itself always updates from SenseChalk.zip.
+# Site link: https://github.com/$REPO/releases/latest/download/SenseChalkSetup.exe
+if [ -n "$WIN_FILE" ] && [ -f SenseChalkSetup.exe ] && gh release view "v$WIN_VER" -R "$REPO" >/dev/null 2>&1; then
+  gh release upload "v$WIN_VER" SenseChalkSetup.exe -R "$REPO" --clobber
+  echo "::notice::SenseChalkSetup.exe attached to v$WIN_VER"
+fi
 exit 0

@@ -12,6 +12,8 @@
 # 배포 방법 (2026-11-21부터): 파일 이름은 항상 SenseChalk.zip 하나로 두고 덮어써요. 버전은 version.txt 한 줄(예: 5.4.3).
 #   홈페이지 링크는 바뀌지 않아요: https://github.com/Osense/Sense_chalk_release/releases/latest/download/SenseChalk.zip
 #   (예전 방식 SenseChalk-<버전>-win-x64.zip도 SenseChalk.zip이 없을 때만 계속 인식해요.)
+# 설치 버전: SenseChalkSetup.exe도 같은 릴리스에 붙어요 (홈페이지 링크 .../releases/latest/download/SenseChalkSetup.exe).
+#   앱 안 업데이트는 두 버전 모두 SenseChalk.zip을 받아요.
 # 바뀐 내용(팝업 문구): notes/SenseChalk.md (예전 방식은 notes/SenseChalk-<버전>-win-x64.md)
 #   첫 줄을 "# 제목"으로 쓰면 팝업 제목, 나머지가 팝업 본문이 돼요. 파일이 없으면 기본 문구를 써요.
 #   노트만 고쳐서 올려도 알림 문구가 다시 기록돼요.
@@ -23,6 +25,7 @@ on:
     branches: [main]
     paths:
       - 'SenseChalk.zip'
+      - 'SenseChalkSetup.exe'
       - 'version.txt'
       - 'SenseChalk-*-win-x64.zip'
       - 'notes/*.md'
