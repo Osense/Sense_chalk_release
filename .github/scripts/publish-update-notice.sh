@@ -56,8 +56,13 @@ publish() { # platform version file tag
     if [ "$platform" = android ]; then message="쎈스 초크 안드로이드 최신 버전(v$version)에서 향상된 기능과 안정성을 만나보세요."
     else message="쎈스 초크 최신 버전(v$version)에서 향상된 기능과 안정성을 만나보세요."; fi
   fi
+  # PC rows record the version with 9 added to the first number (0.5.3.1 -> 9.5.3.1): PCs still on 5.x (before
+  # the 0.x renumbering of 2026-11-22) compare only this field and must see it as newer. 0.5.3.1 and later read
+  # the real number from the tag in download_url (.../releases/download/v<version>/...).
+  local recorded="$version"
+  if [ "$platform" = windows ]; then recorded="$(( ${version%%.*} + 9 )).${version#*.}"; fi
   local body
-  body=$(jq -n --arg p "$platform" --arg v "$version" --arg t "$title" --arg m "$message" --arg l "$link" \
+  body=$(jq -n --arg p "$platform" --arg v "$recorded" --arg t "$title" --arg m "$message" --arg l "$link" \
     --arg d "$download" --arg s "$sha" --argjson z "$size" --arg by "${GITHUB_SHA:-manual}" \
     '{p_platform:$p, p_version:$v, p_title:$t, p_message:$m, p_link_url:$l, p_download_url:$d, p_sha256:$s, p_file_size:$z, p_published_by:$by}')
 
@@ -102,26 +107,5 @@ publish() { # platform version file tag
 if [ -n "$WIN_FILE" ] && [ -f SenseChalkSetup.exe ] && gh release view "v$WIN_VER" -R "$REPO" >/dev/null 2>&1; then
   gh release upload "v$WIN_VER" SenseChalkSetup.exe -R "$REPO" --clobber
   echo "::notice::SenseChalkSetup.exe attached to v$WIN_VER"
-fi
-# Bridge for PCs still on 5.x (the app was renumbered to 0.x on 2026-11-22). Those builds read the newest active
-# row of ANY platform and only update when its version is higher than theirs, so a "windows-legacy" row with
-# version 9.0.0 points them at the current SenseChalk.zip. 0.x builds read platform=windows only and never see it.
-if [ "$WIN_FILE" = SenseChalk.zip ]; then
-  b_sha=$(sha256sum SenseChalk.zip | cut -d' ' -f1); b_size=$(stat -c %s SenseChalk.zip)
-  b_title="새로운 버전이 출시되었어요."; b_message="쎈스 초크 최신 버전(v$WIN_VER)에서 향상된 기능과 안정성을 만나보세요."
-  if [ -f notes/SenseChalk.md ]; then
-    if head -n1 notes/SenseChalk.md | grep -q '^# '; then
-      b_title=$(head -n1 notes/SenseChalk.md | sed 's/^# *//'); b_message=$(tail -n +2 notes/SenseChalk.md | sed '/./,$!d')
-    else b_message=$(cat notes/SenseChalk.md); fi
-  fi
-  b_current=$(curl -fsS "$SUPABASE_URL/rest/v1/rpc/latest_app_release" "${AUTH[@]}" -H "Content-Type: application/json" \
-    -d '{"p_platform":"windows-legacy"}' | jq -r '(.[0].sha256 // "") + "|" + (.[0].title // "")' || true)
-  if [ "$b_current" != "$b_sha|$b_title" ]; then
-    b_body=$(jq -n --arg t "$b_title" --arg m "$b_message" --arg l "https://github.com/$REPO/releases/tag/v$WIN_VER" \
-      --arg d "https://github.com/$REPO/releases/download/v$WIN_VER/SenseChalk.zip" --arg s "$b_sha" --argjson z "$b_size" --arg by "${GITHUB_SHA:-manual}" \
-      '{p_platform:"windows-legacy", p_version:"9.0.0", p_title:$t, p_message:$m, p_link_url:$l, p_download_url:$d, p_sha256:$s, p_file_size:$z, p_published_by:$by}')
-    curl -fsS "$SUPABASE_URL/rest/v1/rpc/publish_app_release" "${AUTH[@]}" -H "Content-Type: application/json" -d "$b_body" | jq '{platform, latest_version, download_url}'
-    echo "::notice::5.x bridge row points at v$WIN_VER"
-  fi
 fi
 exit 0
