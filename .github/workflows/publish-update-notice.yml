@@ -6,6 +6,8 @@
 # 필요한 저장소 Secret (Settings → Secrets and variables → Actions):
 #   SUPABASE_SERVICE_ROLE_KEY  Supabase 대시보드 → Project Settings → API Keys → Secret key (sb_secret_...)
 #                              또는 Legacy API Keys 탭의 service_role 키
+#   UPDATE_SIGNING_KEY         업데이트 서명 개인키 (PEM 전체, -----BEGIN EC PRIVATE KEY----- 부터 끝 줄까지)
+#                              PC 0.5.3.7부터 앱은 이 키로 서명된 zip만 설치해요. 공개키는 앱 안(UpdateSignature.cs)에 있어요.
 # 선택 Variable:
 #   SUPABASE_URL               기본값 https://xwclrqtyynhkziwpwvyq.supabase.co
 #
@@ -57,6 +59,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://xwclrqtyynhkziwpwvyq.supabase.co' }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
           NOTICE_MESSAGE: ${{ github.event.inputs.message || '' }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message || '' }}
         run: bash .github/scripts/publish-update-notice.sh

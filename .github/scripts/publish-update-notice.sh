@@ -10,6 +10,17 @@ if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
   exit 1
 fi
 
+# 2026-11-24: PC 0.5.3.7+ installs only releases signed with the update signing key (ECDSA P-256, PEM), kept as the
+# repository secret UPDATE_SIGNING_KEY. The app checks the signature with its built-in public key.
+sign_release() { # platform version sha256 -> base64 DER signature
+  local keyfile
+  keyfile=$(mktemp)
+  chmod 600 "$keyfile"
+  printf '%s\n' "$UPDATE_SIGNING_KEY" > "$keyfile"
+  printf 'SENSECHALK-UPDATE-1\n%s\n%s\n%s\n' "$1" "$2" "$3" | openssl dgst -sha256 -sign "$keyfile" | base64 -w0
+  rm -f "$keyfile"
+}
+
 # New secret keys (sb_secret_...) go only in the apikey header; a legacy service_role JWT also as Bearer.
 AUTH=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
 case "$SUPABASE_SERVICE_ROLE_KEY" in eyJ*) AUTH+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY");; esac
@@ -24,6 +35,10 @@ if [ -f SenseChalk.zip ] && [ -f version.txt ]; then
 else
   WIN_VER=$(latest 'SenseChalk-*-win-x64.zip' '^SenseChalk-(.*)-win-x64\.zip$')
   [ -n "$WIN_VER" ] && WIN_FILE="SenseChalk-$WIN_VER-win-x64.zip"
+fi
+if [ -n "$WIN_FILE" ] && [ -z "${UPDATE_SIGNING_KEY:-}" ]; then
+  echo "::error::UPDATE_SIGNING_KEY secret is not set; Windows releases cannot be signed."
+  exit 1
 fi
 
 publish() { # platform version file tag
@@ -61,10 +76,15 @@ publish() { # platform version file tag
   # the real number from the tag in download_url (.../releases/download/v<version>/...).
   local recorded="$version"
   if [ "$platform" = windows ]; then recorded="$(( ${version%%.*} + 9 )).${version#*.}"; fi
+  local signature=""
+  if [ "$platform" = windows ]; then
+    signature=$(sign_release "$platform" "$version" "$sha")
+    [ -n "$signature" ] || { echo "::error::signing failed"; exit 1; }
+  fi
   local body
-  body=$(jq -n --arg p "$platform" --arg v "$recorded" --arg t "$title" --arg m "$message" --arg l "$link" \
+  body=$(jq -n --arg sig "$signature" --arg p "$platform" --arg v "$recorded" --arg t "$title" --arg m "$message" --arg l "$link" \
     --arg d "$download" --arg s "$sha" --argjson z "$size" --arg by "${GITHUB_SHA:-manual}" \
-    '{p_platform:$p, p_version:$v, p_title:$t, p_message:$m, p_link_url:$l, p_download_url:$d, p_sha256:$s, p_file_size:$z, p_published_by:$by}')
+    '{p_platform:$p, p_version:$v, p_title:$t, p_message:$m, p_link_url:$l, p_download_url:$d, p_sha256:$s, p_file_size:$z, p_published_by:$by} + (if $sig == "" then {} else {p_signature:$sig} end)')
 
   # The release must carry this file under its own name even when the notice itself is unchanged:
   # releases/latest/download/SenseChalk.zip (the site's download link) depends on it.
@@ -80,8 +100,10 @@ publish() { # platform version file tag
   local current
   current=$(curl -fsS "$SUPABASE_URL/rest/v1/rpc/latest_app_release" \
     "${AUTH[@]}" \
-    -H "Content-Type: application/json" -d "{\"p_platform\":\"$platform\"}" | jq -r '(.[0].sha256 // "") + "|" + (.[0].title // "") + "|" + (.[0].message // "")')
-  if [ "$current" = "$sha|$title|$message" ]; then
+    -H "Content-Type: application/json" -d "{\"p_platform\":\"$platform\"}" | jq -r '(.[0].sha256 // "") + "|" + (.[0].title // "") + "|" + (.[0].message // "") + "|" + (if .[0].signature then "signed" else "" end)')
+  local expected_signed=""
+  [ "$platform" = windows ] && expected_signed="signed"
+  if [ "$current" = "$sha|$title|$message|$expected_signed" ]; then
     echo "$platform $version is already the active notice"; return 0
   fi
 
