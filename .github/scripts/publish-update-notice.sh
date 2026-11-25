@@ -21,9 +21,26 @@ sign_release() { # platform version sha256 -> base64 DER signature
   rm -f "$keyfile"
 }
 
+# 2026-11-25: notices live in the WSNS project (tables/RPCs prefixed chalk_). PCs on 0.5.3.6 and older still read the
+# old SenseChalk project, so while LEGACY_SUPABASE_SERVICE_ROLE_KEY is set the same notice is also written there
+# (old names, no chalk_ prefix) and those PCs are told to update. Remove that secret once nobody runs the old builds.
 # New secret keys (sb_secret_...) go only in the apikey header; a legacy service_role JWT also as Bearer.
-AUTH=(-H "apikey: $SUPABASE_SERVICE_ROLE_KEY")
-case "$SUPABASE_SERVICE_ROLE_KEY" in eyJ*) AUTH+=(-H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY");; esac
+auth_for() { # key -> curl header args, one per line
+  printf '%s\n' -H "apikey: $1"
+  case "$1" in eyJ*) printf '%s\n' -H "Authorization: Bearer $1";; esac
+}
+mapfile -t AUTH < <(auth_for "$SUPABASE_SERVICE_ROLE_KEY")
+LEGACY_AUTH=()
+if [ -n "${LEGACY_SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+  mapfile -t LEGACY_AUTH < <(auth_for "$LEGACY_SUPABASE_SERVICE_ROLE_KEY")
+fi
+
+current_notice() { # url prefix platform auth... -> "sha|title|message|signed"
+  local url=$1 prefix=$2 platform=$3; shift 3
+  curl -fsS "$url/rest/v1/rpc/${prefix}latest_app_release" "$@" \
+    -H "Content-Type: application/json" -d "{\"p_platform\":\"$platform\"}" \
+    | jq -r '(.[0].sha256 // "") + "|" + (.[0].title // "") + "|" + (.[0].message // "") + "|" + (if .[0].signature then "signed" else "" end)'
+}
 
 # Highest version of each kind of file currently in the repository root.
 latest() { { ls -1 $1 2>/dev/null || true; } | sed -E "s/$2/\1/" | sort -V | tail -n1; }
@@ -97,13 +114,15 @@ publish() { # platform version file tag
   fi
 
   # Skip if this exact file is already the active notice (re-runs, README-only commits).
-  local current
-  current=$(curl -fsS "$SUPABASE_URL/rest/v1/rpc/latest_app_release" \
-    "${AUTH[@]}" \
-    -H "Content-Type: application/json" -d "{\"p_platform\":\"$platform\"}" | jq -r '(.[0].sha256 // "") + "|" + (.[0].title // "") + "|" + (.[0].message // "") + "|" + (if .[0].signature then "signed" else "" end)')
-  local expected_signed=""
+  local current expected_signed="" legacy_needed=0
+  current=$(current_notice "$SUPABASE_URL" chalk_ "$platform" "${AUTH[@]}")
   [ "$platform" = windows ] && expected_signed="signed"
-  if [ "$current" = "$sha|$title|$message|$expected_signed" ]; then
+  if [ ${#LEGACY_AUTH[@]} -gt 0 ]; then
+    local legacy
+    legacy=$(current_notice "$LEGACY_SUPABASE_URL" "" "$platform" "${LEGACY_AUTH[@]}" || echo "unreachable")
+    [ "${legacy%|*}" = "$sha|$title|$message" ] || legacy_needed=1
+  fi
+  if [ "$current" = "$sha|$title|$message|$expected_signed" ] && [ $legacy_needed = 0 ]; then
     echo "$platform $version is already the active notice"; return 0
   fi
 
@@ -117,10 +136,23 @@ publish() { # platform version file tag
   # Versions restarted at 0.x after 5.5.2, so "Latest" must follow the newest release, not the highest number:
   # the site links to releases/latest/download/... .
   [ "$platform" = windows ] && gh release edit "$tag" -R "$REPO" --latest >/dev/null
-  curl -fsS "$SUPABASE_URL/rest/v1/rpc/publish_app_release" \
-    "${AUTH[@]}" \
-    -H "Content-Type: application/json" -d "$body" | jq '{platform, latest_version, download_url, sha256}'
-  echo "::notice::$platform $version recorded ($download)"
+  if [ "$current" != "$sha|$title|$message|$expected_signed" ]; then
+    curl -fsS "$SUPABASE_URL/rest/v1/rpc/chalk_publish_app_release" \
+      "${AUTH[@]}" \
+      -H "Content-Type: application/json" -d "$body" | jq '{platform, latest_version, download_url, sha256}'
+    echo "::notice::$platform $version recorded ($download)"
+  fi
+  if [ $legacy_needed = 1 ]; then
+    # The old project may not have the signature column yet: retry without it (old PCs don't check signatures).
+    if curl -fsS "$LEGACY_SUPABASE_URL/rest/v1/rpc/publish_app_release" "${LEGACY_AUTH[@]}" \
+         -H "Content-Type: application/json" -d "$body" >/dev/null 2>&1 \
+       || curl -fsS "$LEGACY_SUPABASE_URL/rest/v1/rpc/publish_app_release" "${LEGACY_AUTH[@]}" \
+         -H "Content-Type: application/json" -d "$(jq 'del(.p_signature)' <<<"$body")" >/dev/null; then
+      echo "::notice::$platform $version also recorded in the old SenseChalk project (for builds before the move)"
+    else
+      echo "::warning::could not record $platform $version in the old SenseChalk project"
+    fi
+  fi
 }
 
 [ -n "$WIN_FILE" ] && publish windows "$WIN_VER" "$WIN_FILE" "v$WIN_VER"
